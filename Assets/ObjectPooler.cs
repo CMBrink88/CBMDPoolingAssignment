@@ -1,65 +1,108 @@
-//Christopher Brinkley and Morgan Davis
-//MMC215 Pooling Assignment
-//2/14/20
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+[System.Serializable]
+public class ObjectPoolItem
+{
+
+	public GameObject objectToPool;
+	public int amountToPool;
+	public bool shouldExpand = true;
+
+	public ObjectPoolItem(GameObject obj, int amt, bool exp = true)
+	{
+		objectToPool = obj;
+		amountToPool = Mathf.Max(amt,2);
+		shouldExpand = exp;
+	}
+}
+
 public class ObjectPooler : MonoBehaviour
 {
-    
-    public Dictionary<string, Queue<GameObject>> poolDictionary; //Dictionary to hold the tag and pool of game objects
-    
-    [System.Serializable] //Marks it inside of the system
-    public class Pool{
-        public string tag; //Tag of the pool
-        public GameObject prefab; //Game ojbects of the pool
-        public int size; //size of the pool AKA Limit on how many objects outside fo pool beore creating new ones
-    }
+	public static ObjectPooler SharedInstance;
+	public List<ObjectPoolItem> itemsToPool;
 
-    #region Singleton
-    public static ObjectPooler Instance;
 
-    private void Awake(){
-        Instance = this; //Starts up the pooling project when the "game" starts
-    }
-    #endregion
+	public List<List<GameObject>> pooledObjectsList;
+	public List<GameObject> pooledObjects;
+	private List<int> positions;
 
-    public List<pool> pools;
+	void Awake()
+	{
 
-    void Start(){
+		SharedInstance = this;
 
-        poolDictionary = new Dictionary<string, Queue<GameObject>>(); //Creates a new dictionary at the start of the game
+		pooledObjectsList = new List<List<GameObject>>();
+		pooledObjects = new List<GameObject>();
+		positions = new List<int>();
 
-        for each (Pool pool in pools){ //loops through each othe pools
-            Queue<GameObject> objectPool = new Queue<GameObject>(); //creates a Queue of game Objects
 
-            for (int i = 0; i < pool size; i++){ //Creates a new game object as long as it is under the pool size
-                GameObject obj = Instantiate(pool.prefab);//MAkes a clone of the object and references it via the GameObject obj
-                obj.SetActive(false);//Disables so we cannot see it yet
-                objectPool.Enqueue(obj);//Adds it to the end of our Queue
-            }
+		for (int i = 0; i < itemsToPool.Count; i++)
+		{
+			ObjectPoolItemToPooledObject(i);
+		}
 
-            poolDictionary.Add(pool.tag, objectPool);//Adds the object to the pool
-        }
-    }
+	}
 
-    public GameObject SpawnFromPool (string tag, Vector3 position, Quaternion rotation){ //Creates the object and puts it in queue
-        
-        if (!poolDictionary.ContainsKey(tag)){
-            Debug.LogWarning("Yo! This tag- " + tag + " doesnt exist, maybe check on that!:)");
-            return null; //If the tag is not available, it will send this message
-        }
 
-        Gameobject objectToSpawn = poolDictionary[tag].Dequeue; //Pulls the first object in the queue and sets it to objectToSpawn
+	public GameObject GetPooledObject(int index)
+	{
 
-        objectToSpawn.SetActive(true);//spawns object
-        objectToSpawn.transform.position = position; //sets the position of the spawned object
-        objectToSpawn.transform.rotation = rotation; //sets the rotation of the spawned object
+		int curSize = pooledObjectsList[index].Count;
+		for (int i = positions[index] + 1; i < positions[index] + pooledObjectsList[index].Count; i++)
+		{
 
-        poolDictionary[tag].Enqueue(objectToSpawn); //Adds the object back into the pool
+			if (!pooledObjectsList[index][i % curSize].activeInHierarchy)
+			{
+				positions[index] = i % curSize;
+				return pooledObjectsList[index][i % curSize];
+			}
+		}
 
-        return objectToSpawn;
-    }
+		if (itemsToPool[index].shouldExpand)
+		{
 
+			GameObject obj = (GameObject)Instantiate(itemsToPool[index].objectToPool);
+			obj.SetActive(false);
+			obj.transform.parent = this.transform;
+			pooledObjectsList[index].Add(obj);
+			return obj;
+
+		}
+		return null;
+	}
+
+	public List<GameObject> GetAllPooledObjects(int index)
+	{
+		return pooledObjectsList[index];
+	}
+
+
+	public int AddObject(GameObject GO, int amt = 3, bool exp = true)
+	{
+		ObjectPoolItem item = new ObjectPoolItem(GO, amt, exp);
+		int currLen = itemsToPool.Count;
+		itemsToPool.Add(item);
+		ObjectPoolItemToPooledObject(currLen);
+		return currLen;
+	}
+
+
+	void ObjectPoolItemToPooledObject(int index)
+	{
+		ObjectPoolItem item = itemsToPool[index];
+
+		pooledObjects = new List<GameObject>();
+		for (int i = 0; i < item.amountToPool; i++)
+		{
+			GameObject obj = (GameObject)Instantiate(item.objectToPool);
+			obj.SetActive(false);
+			obj.transform.parent = this.transform;
+			pooledObjects.Add(obj);
+		}
+		pooledObjectsList.Add(pooledObjects);
+		positions.Add(0);
+
+	}
 }
